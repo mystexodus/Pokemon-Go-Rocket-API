@@ -77,7 +77,7 @@ namespace PokemonGo.RocketAPI.Console
 
                 System.Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss")}] Farmed XP: {fortSearch.ExperienceAwarded}, Gems: { fortSearch.GemsAwarded}, Eggs: {fortSearch.PokemonDataEgg} Items: {GetFriendlyItemsString(fortSearch.ItemsAwarded)}");
 
-                await Task.Delay(15000);
+                await Task.Delay(5000);
                 await ExecuteCatchAllNearbyPokemons(client);
             }
         }
