@@ -84,6 +84,7 @@
     <Compile Include="GeneratedCode\Payloads.cs" />
     <Compile Include="GeneratedCode\Request.cs" />
     <Compile Include="GeneratedCode\Response.cs" />
+    <Compile Include="GeoCoordinate.cs" />
     <Compile Include="Helpers\HttpClientHelper.cs" />
     <Compile Include="Helpers\JsonHelper.cs" />
     <Compile Include="Helpers\ProtoHelper.cs" />
