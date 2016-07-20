@@ -8,6 +8,7 @@ using PokemonGo.RocketAPI.GeneratedCode;
 using PokemonGo.RocketAPI.Helpers;
 using PokemonGo.RocketAPI.Extensions;
 using PokemonGo.RocketAPI.Login;
+using System.Linq;
 
 namespace PokemonGo.RocketAPI
 {
@@ -322,6 +323,44 @@ namespace PokemonGo.RocketAPI
             return
                 await
                     _httpClient.PostProtoPayload<Request, CatchPokemonResponse>($"https://{_apiUrl}/rpc", catchPokemonRequest);
+        }
+
+        public async Task<MiscEnums.Item> GetPokeBall(Client client)
+        {
+            var inventory = await client.GetInventory();
+            var ballCollection = inventory.InventoryDelta.InventoryItems
+                   .Select(i => i.InventoryItemData?.Item)
+                   .Where(p => p != null)
+                   .GroupBy(i => (MiscEnums.Item)i.Item_)
+                   .Select(kvp => new { ItemId = kvp.Key, Amount = kvp.Sum(x => x.Count) })
+                   .Where(y => y.ItemId == MiscEnums.Item.ITEM_POKE_BALL
+                            || y.ItemId == MiscEnums.Item.ITEM_GREAT_BALL
+                            || y.ItemId == MiscEnums.Item.ITEM_ULTRA_BALL
+                            || y.ItemId == MiscEnums.Item.ITEM_MASTER_BALL);
+
+            var pokeBallsCount = ballCollection.Where(p => p.ItemId == MiscEnums.Item.ITEM_POKE_BALL).
+                DefaultIfEmpty(new { ItemId = MiscEnums.Item.ITEM_POKE_BALL, Amount = 0 }).FirstOrDefault().Amount;
+            var greatBallsCount = ballCollection.Where(p => p.ItemId == MiscEnums.Item.ITEM_GREAT_BALL).
+                DefaultIfEmpty(new { ItemId = MiscEnums.Item.ITEM_GREAT_BALL, Amount = 0 }).FirstOrDefault().Amount;
+            var ultraBallsCount = ballCollection.Where(p => p.ItemId == MiscEnums.Item.ITEM_ULTRA_BALL).
+                DefaultIfEmpty(new { ItemId = MiscEnums.Item.ITEM_ULTRA_BALL, Amount = 0 }).FirstOrDefault().Amount;
+            var masterBallsCount = ballCollection.Where(p => p.ItemId == MiscEnums.Item.ITEM_MASTER_BALL).
+                DefaultIfEmpty(new { ItemId = MiscEnums.Item.ITEM_MASTER_BALL, Amount = 0 }).FirstOrDefault().Amount;
+
+            if (pokeBallsCount > 0)
+                return MiscEnums.Item.ITEM_POKE_BALL;
+
+            if (greatBallsCount > 0)
+                return MiscEnums.Item.ITEM_GREAT_BALL;
+
+            if (ultraBallsCount > 0)
+                return MiscEnums.Item.ITEM_ULTRA_BALL;
+
+            if (masterBallsCount > 0)
+                return MiscEnums.Item.ITEM_MASTER_BALL;
+
+            return MiscEnums.Item.ITEM_POKE_BALL;
+
         }
 
         public async Task<TransferPokemonOut> TransferPokemon(ulong pokemonId)
