@@ -1,17 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 using AllEnum;
-using Google.Protobuf;
 using PokemonGo.RocketAPI.Enums;
 using PokemonGo.RocketAPI.Exceptions;
 using PokemonGo.RocketAPI.Extensions;
 using PokemonGo.RocketAPI.GeneratedCode;
-using PokemonGo.RocketAPI.Helpers;
 
 namespace PokemonGo.RocketAPI.Console
 {
@@ -44,23 +39,34 @@ namespace PokemonGo.RocketAPI.Console
         {
             var client = new Client(ClientSettings);
 
-            if (ClientSettings.AuthType == AuthType.Ptc)
-                await client.DoPtcLogin(ClientSettings.PtcUsername, ClientSettings.PtcPassword);
-            else if (ClientSettings.AuthType == AuthType.Google)
-                await client.DoGoogleLogin();
-            
-            await client.SetServer();
-            var profile = await client.GetProfile();
-            var settings = await client.GetSettings();
-            var mapObjects = await client.GetMapObjects();
-            var inventory = await client.GetInventory();
-            var pokemons = inventory.InventoryDelta.InventoryItems.Select(i => i.InventoryItemData?.Pokemon).Where(p => p != null && p?.PokemonId > 0);
+            while (true)
+            {
+                try
+                {
+                    if (ClientSettings.AuthType == AuthType.Ptc)
+                        await client.DoPtcLogin(ClientSettings.PtcUsername, ClientSettings.PtcPassword);
+                    else if (ClientSettings.AuthType == AuthType.Google)
+                        await client.DoGoogleLogin();
 
+                    await client.SetServer();
+                    var profile = await client.GetProfile();
+                    var settings = await client.GetSettings();
+                    var mapObjects = await client.GetMapObjects();
+                    var inventory = await client.GetInventory();
+                    var pokemons = inventory.InventoryDelta.InventoryItems.Select(i => i.InventoryItemData?.Pokemon).Where(p => p != null && p?.PokemonId > 0);
 
-            await ExecuteFarmingPokestopsAndPokemons(client);
-            //await ExecuteCatchAllNearbyPokemons(client);
+                    System.Console.WriteLine("Starting farm...");
 
-            
+                    await ExecuteFarmingPokestopsAndPokemons(client);
+                }
+                catch (Exception)
+                {
+                    // Got to catch them all.... right?
+                }
+
+                System.Console.WriteLine("Unexpected stop? Restarting in 20 seconds.");
+                await Task.Delay(20000);
+            }
         }
 
         private static async Task ExecuteFarmingPokestopsAndPokemons(Client client)
