@@ -1,30 +1,19 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO.Compression;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Formatting;
-using System.Net.Http.Headers;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
-using System.Web;
-using System.Windows.Forms;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using PokemonGo.RocketAPI.Enums;
 using PokemonGo.RocketAPI.GeneratedCode;
 using PokemonGo.RocketAPI.Helpers;
 using PokemonGo.RocketAPI.Extensions;
-using System.Threading;
+using PokemonGo.RocketAPI.Login;
 
 namespace PokemonGo.RocketAPI
 {
     public class Client
     {
+        private readonly ISettings _settings;
         private readonly HttpClient _httpClient;
         private AuthType _authType = AuthType.Google;
         private string _accessToken;
@@ -34,9 +23,10 @@ namespace PokemonGo.RocketAPI
         private double _currentLat;
         private double _currentLng;
 
-        public Client(double lat, double lng)
+        public Client(ISettings settings)
         {
-            SetCoordinates(lat, lng);
+            _settings = settings;
+            SetCoordinates(_settings.DefaultLatitude, _settings.DefaultLongitude);
 
             //Setup HttpClient and create default headers
             HttpClientHandler handler = new HttpClientHandler()
@@ -60,163 +50,25 @@ namespace PokemonGo.RocketAPI
             _currentLng = lng;
         }
 
-        public async Task LoginGoogle(string deviceId, string email, string refreshToken)
+        public async Task DoGoogleLogin()
         {
-            var handler = new HttpClientHandler()
+            if (_settings.GoogleRefreshToken == string.Empty)
             {
-                AutomaticDecompression = DecompressionMethods.GZip,
-                AllowAutoRedirect = false
-            };
-
-            using (var tempHttpClient = new HttpClient(handler))
+                var tokenResponse = await GoogleLogin.GetAccessToken();
+                _accessToken = tokenResponse.id_token;
+                _settings.GoogleRefreshToken = tokenResponse.access_token;
+            }
+            else
             {
-                tempHttpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-                    "GoogleAuth/1.4 (kltexx LMY48G); gzip");
-                tempHttpClient.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
-                tempHttpClient.DefaultRequestHeaders.Add("device", deviceId);
-                tempHttpClient.DefaultRequestHeaders.Add("app", "com.nianticlabs.pokemongo");
-
-                var response = await tempHttpClient.PostAsync(Resources.GoogleGrantRefreshAccessUrl,
-                    new FormUrlEncodedContent(
-                        new[]
-                        {
-                            new KeyValuePair<string, string>("androidId", deviceId),
-                            new KeyValuePair<string, string>("lang", "nl_NL"),
-                            new KeyValuePair<string, string>("google_play_services_version", "9256238"),
-                            new KeyValuePair<string, string>("sdk_version", "22"),
-                            new KeyValuePair<string, string>("device_country", "nl"),
-                            new KeyValuePair<string, string>("client_sig", Settings.ClientSig),
-                            new KeyValuePair<string, string>("caller_sig", Settings.ClientSig),
-                            new KeyValuePair<string, string>("Email", email),
-                            new KeyValuePair<string, string>("service",
-                                "audience:server:client_id:848232511240-7so421jotr2609rmqakceuu1luuq0ptb.apps.googleusercontent.com"),
-                            new KeyValuePair<string, string>("app", "com.nianticlabs.pokemongo"),
-                            new KeyValuePair<string, string>("check_email", "1"),
-                            new KeyValuePair<string, string>("token_request_options", ""),
-                            new KeyValuePair<string, string>("callerPkg", "com.nianticlabs.pokemongo"),
-                            new KeyValuePair<string, string>("Token", refreshToken)
-                        }));
-
-                var content = await response.Content.ReadAsStringAsync();
-                _accessToken = content.Split(new[] {"Auth=", "issueAdvice"}, StringSplitOptions.RemoveEmptyEntries)[0];
-                _authType = AuthType.Google;
+                var tokenResponse = await GoogleLogin.GetAccessToken(_settings.GoogleRefreshToken);
+                _accessToken = tokenResponse.id_token;
+                _authType  = AuthType.Google;
             }
         }
 
-        public async Task LoginGoogle()
+        public async Task DoPtcLogin(string username, string password)
         {
-
-            String OAUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/device/code";
-            String CLIENT_ID = "848232511240-73ri3t7plvk96pj4f85uj8otdat2alem.apps.googleusercontent.com";
-
-            var handler = new HttpClientHandler()
-            {
-                AutomaticDecompression = DecompressionMethods.GZip,
-                AllowAutoRedirect = false
-            };
-
-            using (var tempHttpClient = new HttpClient(handler))
-            {
-                var response = await tempHttpClient.PostAsync(OAUTH_ENDPOINT,
-                    new FormUrlEncodedContent(
-                        new[]
-                        {
-                            new KeyValuePair<string, string>("client_id", CLIENT_ID),
-                            new KeyValuePair<string, string>("scope", "openid email https://www.googleapis.com/auth/userinfo.email")
-                        }));
-
-                var content = await response.Content.ReadAsStringAsync();
-                JToken token = JObject.Parse(content);
-                JToken token2;
-                Console.WriteLine("Please visit " + token.SelectToken("verification_url") + " and enter " + token.SelectToken("user_code"));
-                while ((token2 = poll(token)) == null)
-                {
-                    Thread.Sleep(Convert.ToInt32(token.SelectToken("interval")) * 1000);
-                }
-                string authToken = token2.SelectToken("id_token").ToString();
-                Console.WriteLine("Sucessfully receieved token.");
-                _accessToken = authToken;
-                _authType = AuthType.Google;
-            }
-        }
-
-
-        private JToken poll(JToken json)
-        {
-            var handler = new HttpClientHandler()
-            {
-                AutomaticDecompression = DecompressionMethods.GZip,
-                AllowAutoRedirect = false
-            };
-
-            String OAUTH_TOKEN_ENDPOINT = "https://www.googleapis.com/oauth2/v4/token";
-            String SECRET = "NCjF1TLi2CcY6t5mt0ZveuL7";
-            String CLIENT_ID = "848232511240-73ri3t7plvk96pj4f85uj8otdat2alem.apps.googleusercontent.com";
-
-            using (var tempHttpClient = new HttpClient(handler))
-            {
-                var response = tempHttpClient.PostAsync(OAUTH_TOKEN_ENDPOINT,
-                    new FormUrlEncodedContent(
-                        new[]
-                        {
-                            new KeyValuePair<string, string>("client_id", CLIENT_ID),
-                            new KeyValuePair<string, string>("client_secret", SECRET),
-                            new KeyValuePair<string, string>("code", json.SelectToken("device_code").ToString()),
-                            new KeyValuePair<string, string>("grant_type", "http://oauth.net/grant_type/device/1.0"),
-                            new KeyValuePair<string, string>("scope", "openid email https://www.googleapis.com/auth/userinfo.email")
-                        }));
-
-                string content = response.Result.Content.ReadAsStringAsync().Result;
-                JToken token = JObject.Parse(content);
-                if (token.SelectToken("error") == null)
-                {
-                    return token;
-                }
-                else
-                {
-                    return null;
-                }
-            }
-
-        }
-
-        public async Task LoginPtc(string username, string password)
-        {
-            //Get session cookie
-            var sessionResp = await _httpClient.GetAsync(Resources.PtcLoginUrl);
-            var data = await sessionResp.Content.ReadAsStringAsync();
-            var lt = JsonHelper.GetValue(data, "lt");
-            var executionId = JsonHelper.GetValue(data, "execution");
-
-            //Login
-            var loginResp = await _httpClient.PostAsync(Resources.PtcLoginUrl,
-                new FormUrlEncodedContent(
-                    new[]
-                    {
-                        new KeyValuePair<string, string>("lt", lt),
-                        new KeyValuePair<string, string>("execution", executionId),
-                        new KeyValuePair<string, string>("_eventId", "submit"),
-                        new KeyValuePair<string, string>("username", username),
-                        new KeyValuePair<string, string>("password", password),
-                    }));
-
-            var ticketId = HttpUtility.ParseQueryString(loginResp.Headers.Location.Query)["ticket"];
-
-            //Get tokenvar 
-            var tokenResp = await _httpClient.PostAsync(Resources.PtcLoginOauth,
-                new FormUrlEncodedContent(
-                    new[]
-                    {
-                        new KeyValuePair<string, string>("client_id", "mobile-app_pokemon-go"),
-                        new KeyValuePair<string, string>("redirect_uri", "https://www.nianticlabs.com/pokemongo/error"),
-                        new KeyValuePair<string, string>("client_secret",
-                            "w8ScCUXJQc6kXKw8FiOhd8Fixzht18Dq3PEVkUCP5ZPxtgyWsbTvWHFLm2wNY0JR"),
-                        new KeyValuePair<string, string>("grant_type", "grant_type"),
-                        new KeyValuePair<string, string>("code", ticketId),
-                    }));
-
-            var tokenData = await tokenResp.Content.ReadAsStringAsync();
-            _accessToken = HttpUtility.ParseQueryString(tokenData)["access_token"];
+            _accessToken = await PtcLogin.GetAccessToken(username, password);
             _authType = AuthType.Ptc;
         }
 
@@ -236,43 +88,41 @@ namespace PokemonGo.RocketAPI
                     Message = customRequest.ToByteString()
                 });
             var updateResponse =
-                await _httpClient.PostProto<Request, PlayerUpdateResponse>($"https://{_apiUrl}/rpc", updateRequest);
+                await _httpClient.PostProtoPayload<Request, PlayerUpdateResponse>($"https://{_apiUrl}/rpc", updateRequest);
             return updateResponse;
         }
 
-        public async Task<ProfileResponse> GetServer()
+        public async Task SetServer()
         {
             var serverRequest = RequestBuilder.GetInitialRequest(_accessToken, _authType, _currentLat, _currentLng, 10,
                 RequestType.GET_PLAYER, RequestType.GET_HATCHED_OBJECTS, RequestType.GET_INVENTORY,
                 RequestType.CHECK_AWARDED_BADGES, RequestType.DOWNLOAD_SETTINGS);
-            var serverResponse = await _httpClient.PostProto<Request, ProfileResponse>(Resources.RpcUrl, serverRequest);
+            var serverResponse = await _httpClient.PostProto<Request>(Resources.RpcUrl, serverRequest);
+            _unknownAuth = new Request.Types.UnknownAuth()
+            {
+                Unknown71 = serverResponse.Auth.Unknown71,
+                Timestamp = serverResponse.Auth.Timestamp,
+                Unknown73 = serverResponse.Auth.Unknown73,
+            };
+
             _apiUrl = serverResponse.ApiUrl;
-            return serverResponse;
         }
 
-        public async Task<ProfileResponse> GetProfile()
+        public async Task<GetPlayerResponse> GetProfile()
         {
             var profileRequest = RequestBuilder.GetInitialRequest(_accessToken, _authType, _currentLat, _currentLng, 10,
                 new Request.Types.Requests() {Type = (int) RequestType.GET_PLAYER});
-            var profileResponse =
-                await _httpClient.PostProto<Request, ProfileResponse>($"https://{_apiUrl}/rpc", profileRequest);
-            _unknownAuth = new Request.Types.UnknownAuth()
-            {
-                Unknown71 = profileResponse.Auth.Unknown71,
-                Timestamp = profileResponse.Auth.Timestamp,
-                Unknown73 = profileResponse.Auth.Unknown73,
-            };
-            return profileResponse;
+            return await _httpClient.PostProtoPayload<Request, GetPlayerResponse>($"https://{_apiUrl}/rpc", profileRequest);
         }
 
-        public async Task<SettingsResponse> GetSettings()
+        public async Task<DownloadSettingsResponse> GetSettings()
         {
             var settingsRequest = RequestBuilder.GetRequest(_unknownAuth, _currentLat, _currentLng, 10,
                 RequestType.DOWNLOAD_SETTINGS);
-            return await _httpClient.PostProto<Request, SettingsResponse>($"https://{_apiUrl}/rpc", settingsRequest);
+            return await _httpClient.PostProtoPayload<Request, DownloadSettingsResponse>($"https://{_apiUrl}/rpc", settingsRequest);
         }
 
-        public async Task<MapObjectsResponse> GetMapObjects()
+        public async Task<GetMapObjectsResponse> GetMapObjects()
         {
             var customRequest = new Request.Types.MapObjectsRequest()
             {
@@ -308,10 +158,10 @@ namespace PokemonGo.RocketAPI
                         }.ToByteString()
                 });
 
-            return await _httpClient.PostProto<Request, MapObjectsResponse>($"https://{_apiUrl}/rpc", mapRequest);
+            return await _httpClient.PostProtoPayload<Request, GetMapObjectsResponse>($"https://{_apiUrl}/rpc", mapRequest);
         }
 
-        public async Task<FortDetailResponse> GetFort(string fortId, double fortLat, double fortLng)
+        public async Task<FortDetailsResponse> GetFort(string fortId, double fortLat, double fortLng)
         {
             var customRequest = new Request.Types.FortDetailsRequest()
             {
@@ -326,7 +176,7 @@ namespace PokemonGo.RocketAPI
                     Type = (int) RequestType.FORT_DETAILS,
                     Message = customRequest.ToByteString()
                 });
-            return await _httpClient.PostProto<Request, FortDetailResponse>($"https://{_apiUrl}/rpc", fortDetailRequest);
+            return await _httpClient.PostProtoPayload<Request, FortDetailsResponse>($"https://{_apiUrl}/rpc", fortDetailRequest);
         }
 
         /*num Holoholo.Rpc.Types.FortSearchOutProto.Result {
@@ -354,7 +204,7 @@ namespace PokemonGo.RocketAPI
                     Type = (int) RequestType.FORT_SEARCH,
                     Message = customRequest.ToByteString()
                 });
-            return await _httpClient.PostProto<Request, FortSearchResponse>($"https://{_apiUrl}/rpc", fortDetailRequest);
+            return await _httpClient.PostProtoPayload<Request, FortSearchResponse>($"https://{_apiUrl}/rpc", fortDetailRequest);
         }
 
         public async Task<EncounterResponse> EncounterPokemon(ulong encounterId, string spawnPointGuid)
@@ -373,16 +223,17 @@ namespace PokemonGo.RocketAPI
                     Type = (int) RequestType.ENCOUNTER,
                     Message = customRequest.ToByteString()
                 });
-            return await _httpClient.PostProto<Request, EncounterResponse>($"https://{_apiUrl}/rpc", encounterResponse);
+            return await _httpClient.PostProtoPayload<Request, EncounterResponse>($"https://{_apiUrl}/rpc", encounterResponse);
         }
 
         public async Task<CatchPokemonResponse> CatchPokemon(ulong encounterId, string spawnPointGuid, double pokemonLat,
-            double pokemonLng)
+            double pokemonLng, MiscEnums.Item pokeball)
         {
+
             var customRequest = new Request.Types.CatchPokemonRequest()
             {
                 EncounterId = encounterId,
-                Pokeball = (int) MiscEnums.Item.ITEM_POKE_BALL,
+                Pokeball = (int) pokeball,
                 SpawnPointGuid = spawnPointGuid,
                 HitPokemon = 1,
                 NormalizedReticleSize = Utils.FloatAsUlong(1.950),
@@ -398,14 +249,47 @@ namespace PokemonGo.RocketAPI
                 });
             return
                 await
-                    _httpClient.PostProto<Request, CatchPokemonResponse>($"https://{_apiUrl}/rpc", catchPokemonRequest);
+                    _httpClient.PostProtoPayload<Request, CatchPokemonResponse>($"https://{_apiUrl}/rpc", catchPokemonRequest);
         }
 
+        public async Task<TransferPokemonOut> TransferPokemon(ulong pokemonId)
+        {
+            var customRequest = new TransferPokemon
+            {
+                PokemonId = pokemonId
+            };
 
-        public async Task<InventoryResponse> GetInventory()
+            var releasePokemonRequest = RequestBuilder.GetRequest(_unknownAuth, _currentLat, _currentLng, 30,
+                new Request.Types.Requests()
+                {
+                    Type = (int)RequestType.RELEASE_POKEMON,
+                    Message = customRequest.ToByteString()
+                });
+            return await _httpClient.PostProtoPayload<Request, TransferPokemonOut>($"https://{_apiUrl}/rpc", releasePokemonRequest);
+        }
+
+        public async Task<EvolvePokemonOut> EvolvePokemon(ulong pokemonId)
+        {
+            var customRequest = new EvolvePokemon
+            {
+                PokemonId = pokemonId
+            };
+
+            var releasePokemonRequest = RequestBuilder.GetRequest(_unknownAuth, _currentLat, _currentLng, 30,
+                new Request.Types.Requests()
+                {
+                    Type = (int)RequestType.EVOLVE_POKEMON,
+                    Message = customRequest.ToByteString()
+                });
+            return
+                await
+                    _httpClient.PostProtoPayload<Request, EvolvePokemonOut>($"https://{_apiUrl}/rpc", releasePokemonRequest);
+        }
+
+        public async Task<GetInventoryResponse> GetInventory()
         {
             var inventoryRequest = RequestBuilder.GetRequest(_unknownAuth, _currentLat, _currentLng, 30, RequestType.GET_INVENTORY);
-            return await _httpClient.PostProto<Request, InventoryResponse>($"https://{_apiUrl}/rpc", inventoryRequest);
+            return await _httpClient.PostProtoPayload<Request, GetInventoryResponse>($"https://{_apiUrl}/rpc", inventoryRequest);
         }
     }
 }
