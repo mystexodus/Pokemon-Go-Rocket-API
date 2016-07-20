@@ -14,7 +14,6 @@ namespace PokemonGo.RocketAPI.Extensions
     {
         public static async Task<TResponsePayload> PostProtoPayload<TRequest, TResponsePayload>(this HttpClient client, string url, TRequest request) where TRequest : IMessage<TRequest> where TResponsePayload : IMessage<TResponsePayload>, new()
         {
-            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss")}] requesting {typeof(TResponsePayload).Name}.");
             var response = await PostProto<TRequest>(client, url, request);
 
             //Decode payload

@@ -44,9 +44,15 @@ namespace PokemonGo.RocketAPI.Console
                 try
                 {
                     if (ClientSettings.AuthType == AuthType.Ptc)
+                    {
+                        System.Console.WriteLine("Using PTC, Logging in.");
                         await client.DoPtcLogin(ClientSettings.PtcUsername, ClientSettings.PtcPassword);
+                    }
                     else if (ClientSettings.AuthType == AuthType.Google)
+                    {
+                        System.Console.WriteLine("Using Google, Logging in");
                         await client.DoGoogleLogin();
+                    }
 
                     await client.SetServer();
                     var profile = await client.GetProfile();
