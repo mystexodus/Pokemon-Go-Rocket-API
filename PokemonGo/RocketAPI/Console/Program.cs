@@ -121,13 +121,13 @@ namespace PokemonGo.RocketAPI.Console
                 {
                   System.Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss")}] We caught a {pokemon.PokemonId} with CP {encounterPokemonResponse?.WildPokemon?.PokemonData?.Cp}");
                   client.numCaught++;
-                  System.Console.WriteLine($"Caught {client.numCaught} so far");
+                  System.Console.WriteLine($"Caught {client.numCaught} so far of {client.numCaught + client.numMissed}");
                 }
                 else
                 {
                   System.Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss")}] {pokemon.PokemonId} with CP {encounterPokemonResponse?.WildPokemon?.PokemonData?.Cp} got away..");
                   client.numMissed++;
-                  System.Console.WriteLine($"Missed {client.numMissed} so far");
+                  System.Console.WriteLine($"Missed {client.numMissed} so far of {client.numCaught + client.numMissed}");
                 }
 
                 await Task.Delay(5000);
@@ -218,9 +218,6 @@ namespace PokemonGo.RocketAPI.Console
 
             var unwantedPokemonTypes = new[]
             {
-                PokemonId.Bellsprout,
-                PokemonId.Doduo,
-                PokemonId.Krabby,
                 PokemonId.Pidgey,
                 PokemonId.Rattata,
                 PokemonId.Weedle,
@@ -230,8 +227,6 @@ namespace PokemonGo.RocketAPI.Console
                 PokemonId.NidoranFemale,
                 PokemonId.Paras,
                 PokemonId.Venonat,
-                PokemonId.Pidgeot,
-                PokemonId.Pinsir,
                 PokemonId.Psyduck,
                 PokemonId.Poliwag,
                 PokemonId.Slowpoke,
@@ -241,7 +236,15 @@ namespace PokemonGo.RocketAPI.Console
                 PokemonId.Staryu,
                 PokemonId.Magikarp,
                 PokemonId.Eevee,
-                PokemonId.Dratini
+                PokemonId.Dratini,
+                PokemonId.NidoranMale,
+                PokemonId.Spearow,
+                PokemonId.Exeggcute,
+                PokemonId.Horsea,
+                PokemonId.Bellsprout,
+                PokemonId.Doduo,
+                PokemonId.Krabby,
+                PokemonId.Pinsir
             };
 
             var inventory = await client.GetInventory();
@@ -259,11 +262,14 @@ namespace PokemonGo.RocketAPI.Console
                 var unwantedPokemon = pokemonOfDesiredType.Skip(1) // keep the strongest one for potential battle-evolving
                                                           .ToList();
 
-                System.Console.WriteLine($"Grinding {unwantedPokemon.Count} pokemons of type {unwantedPokemonType}");
+                if (unwantedPokemon.Count > 0)
+                {
+                  System.Console.WriteLine($"Grinding {unwantedPokemon.Count} pokemons of type {unwantedPokemonType}");
+                }
                 await TransferAllGivenPokemons(client, unwantedPokemon);
             }
 
-            System.Console.WriteLine("[!] finished grinding all the meat");
+            //System.Console.WriteLine("[!] finished grinding all the meat");
         }
 
         private static string GetFriendlyItemsString(IEnumerable<FortSearchResponse.Types.ItemAward> items)
