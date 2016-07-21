@@ -24,6 +24,8 @@ namespace PokemonGo.RocketAPI
         private const double LocationRandomizationInMeters = 1f;
 
         private GeoCoordinate _currentLocation;
+        public int numCaught;
+        public int numMissed;
 
         public Client(ISettings settings)
         {
