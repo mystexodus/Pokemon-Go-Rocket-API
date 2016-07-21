@@ -218,6 +218,9 @@ namespace PokemonGo.RocketAPI.Console
 
             var unwantedPokemonTypes = new[]
             {
+                PokemonId.Bellsprout,
+                PokemonId.Doduo,
+                PokemonId.Krabby,
                 PokemonId.Pidgey,
                 PokemonId.Rattata,
                 PokemonId.Weedle,
@@ -227,6 +230,8 @@ namespace PokemonGo.RocketAPI.Console
                 PokemonId.NidoranFemale,
                 PokemonId.Paras,
                 PokemonId.Venonat,
+                PokemonId.Pidgeot,
+                PokemonId.Pinsir,
                 PokemonId.Psyduck,
                 PokemonId.Poliwag,
                 PokemonId.Slowpoke,
