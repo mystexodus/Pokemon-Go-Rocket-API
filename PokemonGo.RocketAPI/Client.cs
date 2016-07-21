@@ -9,6 +9,7 @@ using PokemonGo.RocketAPI.Helpers;
 using PokemonGo.RocketAPI.Extensions;
 using PokemonGo.RocketAPI.Login;
 using System.Linq;
+using static PokemonGo.RocketAPI.GeneratedCode.Response.Types;
 
 namespace PokemonGo.RocketAPI
 {
@@ -55,17 +56,18 @@ namespace PokemonGo.RocketAPI
 
         public async Task DoGoogleLogin()
         {
-            if (_settings.GoogleRefreshToken == string.Empty)
+            _authType = AuthType.Google;
+            if (_settings.GoogleRefreshToken != string.Empty)
+            {
+                var tokenResponse = await GoogleLogin.GetAccessToken(_settings.GoogleRefreshToken);
+                _accessToken = tokenResponse.id_token;
+            }
+            
+            if (_accessToken == null)
             {
                 var tokenResponse = await GoogleLogin.GetAccessToken();
                 _accessToken = tokenResponse.id_token;
                 _settings.GoogleRefreshToken = tokenResponse.access_token;
-            }
-            else
-            {
-                var tokenResponse = await GoogleLogin.GetAccessToken(_settings.GoogleRefreshToken);
-                _accessToken = tokenResponse.id_token;
-                _authType = AuthType.Google;
             }
         }
 
@@ -192,6 +194,17 @@ namespace PokemonGo.RocketAPI
             return await _httpClient.PostProtoPayload<Request, DownloadSettingsResponse>($"https://{_apiUrl}/rpc", settingsRequest);
         }
 
+        public async Task<DownloadItemTemplatesResponse> GetItemTemplates()
+        {
+            var randomizedLocation = RandomizeLocation(_currentLocation);
+            var settingsRequest = RequestBuilder.GetRequest(_unknownAuth, randomizedLocation.Latitude, randomizedLocation.Longitude, 10,
+                RequestType.DOWNLOAD_ITEM_TEMPLATES);
+            return
+                await
+                    _httpClient.PostProtoPayload<Request, DownloadItemTemplatesResponse>($"https://{_apiUrl}/rpc",
+                        settingsRequest);
+        }
+
         public async Task<GetMapObjectsResponse> GetMapObjects()
         {
             var randomizedLocation = RandomizeLocation(_currentLocation);
@@ -251,14 +264,6 @@ namespace PokemonGo.RocketAPI
             return await _httpClient.PostProtoPayload<Request, FortDetailsResponse>($"https://{_apiUrl}/rpc", fortDetailRequest);
         }
 
-        /*num Holoholo.Rpc.Types.FortSearchOutProto.Result {
-         NO_RESULT_SET = 0;
-         SUCCESS = 1;
-         OUT_OF_RANGE = 2;
-         IN_COOLDOWN_PERIOD = 3;
-         INVENTORY_FULL = 4;
-        }*/
-
         public async Task<FortSearchResponse> SearchFort(string fortId, double fortLat, double fortLng)
         {
             var randomizedLocation = RandomizeLocation(_currentLocation);
@@ -298,6 +303,25 @@ namespace PokemonGo.RocketAPI
                     Message = customRequest.ToByteString()
                 });
             return await _httpClient.PostProtoPayload<Request, EncounterResponse>($"https://{_apiUrl}/rpc", encounterResponse);
+        }
+
+        public async Task<UseItemCaptureRequest> UseCaptureItem(ulong encounterId, AllEnum.ItemId itemId, string spawnPointGuid)
+        {
+            var randomizedLocation = RandomizeLocation(_currentLocation);
+            var customRequest = new UseItemCaptureRequest
+            {
+                EncounterId = encounterId,
+                ItemId = itemId,
+                SpawnPointGuid = spawnPointGuid
+            };
+
+            var useItemRequest = RequestBuilder.GetRequest(_unknownAuth, randomizedLocation.Latitude, randomizedLocation.Longitude, 30,
+                new Request.Types.Requests()
+                {
+                    Type = (int)RequestType.USE_ITEM_CAPTURE,
+                    Message = customRequest.ToByteString()
+                });
+            return await _httpClient.PostProtoPayload<Request, UseItemCaptureRequest>($"https://{_apiUrl}/rpc", useItemRequest);
         }
 
         public async Task<CatchPokemonResponse> CatchPokemon(ulong encounterId, string spawnPointGuid, double pokemonLat,
@@ -406,6 +430,24 @@ namespace PokemonGo.RocketAPI
             var randomizedLocation = RandomizeLocation(_currentLocation);
             var inventoryRequest = RequestBuilder.GetRequest(_unknownAuth, randomizedLocation.Latitude, randomizedLocation.Longitude, 30, RequestType.GET_INVENTORY);
             return await _httpClient.PostProtoPayload<Request, GetInventoryResponse>($"https://{_apiUrl}/rpc", inventoryRequest);
+        }
+
+        public async Task<RecycleInventoryItemResponse> RecycleItem(AllEnum.ItemId itemId, int amount)
+        {
+            var randomizedLocation = RandomizeLocation(_currentLocation);
+            var customRequest = new RecycleInventoryItem
+            {
+                ItemId = (AllEnum.ItemId)Enum.Parse(typeof(AllEnum.ItemId), itemId.ToString()),
+                Count = amount
+            };
+
+            var releasePokemonRequest = RequestBuilder.GetRequest(_unknownAuth, randomizedLocation.Latitude, randomizedLocation.Longitude, 30,
+                new Request.Types.Requests()
+                {
+                    Type = (int)RequestType.RECYCLE_INVENTORY_ITEM,
+                    Message = customRequest.ToByteString()
+                });
+            return await _httpClient.PostProtoPayload<Request, RecycleInventoryItemResponse>($"https://{_apiUrl}/rpc", releasePokemonRequest);
         }
     }
 }
